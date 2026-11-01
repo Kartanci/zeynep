@@ -6,10 +6,10 @@ const ICERIK = {
   // Zeynep bunları sana sesli soracak. Puanların toplamı 100 olmalı.
   // bos: true olan satır "müfredat dışı": kağıtta soru yok, Zeynep aklına geleni kendisi sorar.
   sorular: [
-    { metin: '"Ne yiyelim?" diye sorduğunda ben ne derim?', puan: 10 },
-    { metin: 'Kahvemi nasıl içerim?', puan: 10 },
-    { metin: 'Seninle ilk konuştuğumuz gün ne konuştuk?', puan: 15 },
-    { metin: 'Beni güldürmenin en garanti yolu ne?', puan: 15 },
+    { metin: 'İlk buluştuğumuz kafe neresi?', puan: 10 },
+    { metin: 'İlk beraber izlediğimiz dizi?', puan: 10 },
+    { metin: 'En sevdiğim aktivite ne?', puan: 15 },
+    { metin: 'En sevdiğim yemek ne?', puan: 15 },
     { bos: true, puan: 10 },
     { metin: 'Bende en sevdiğin şey ne? (Bu soru 40 puan. Acele etme.)', puan: 40 },
   ],
@@ -18,19 +18,19 @@ const ICERIK = {
   // Listenin son maddesi her zaman son bilet olarak çıkar.
   kuponlar: [
     '1 kez "haklıydın" dedirtme hakkı. Geçmişe dönük de olur.',
-    'Bir hafta "ne yiyelim" sorusu yok. Enes karar verecek.',
-    'Gecenin 3\'ünde arama hakkı. Açacak.',
+    'İstanbul\'a gittiğinizde istediğin bir şeyi hediye olarak alma hakkı.',
     'Film seçme hakkı. Enes sonuna kadar uyumayacak.',
-    'Enes\'in telefonu bir akşam boyunca ters duracak.',
-    'İstediğin bir şarkıyı sana söyleyecek. Bu sefer de kötü.',
+    'Bir gün boyunca ne istersen yapacak (gerçekten ne istersen).',
+    'Bir gün istediğin kadar AVM\'de seninle beraber gezecek.',
     'Bir sonraki görüşmede uzun bir sarılma. Süreye sen karar verirsin.',
   ],
 
   // Son sayfadaki not. En iyisi buraya kendi cümlelerini yazman.
   enesNotu: [
-    'Zeynep,',
-    'uzun yazmayacağım. söyleyeceğimi az önce söyledim. söyleyemediysem bir daha ararım.',
-    'bu defter sende kalsın.',
+    'Canım sevgilim,',
+    'İyi ki doğdun, iyi ki benimsin. Ben seninle hayat buldum. Seni çok ama çok seviyorum.',
+    'Dünya bir yana, sen bir yana...',
+    'Bu defter sende anı olarak kalsın.',
   ],
 
   // Arka kapaktaki çarpım tablosunun yanına el yazısıyla düşülen notlar (yaş x 1, x 2, x 3, x 4).

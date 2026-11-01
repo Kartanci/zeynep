@@ -25,7 +25,7 @@ class CandleScene {
     this.root = el('div', 'mum-sahne');
     this.ambient = el('div', 'mum-ortam');
     this.pale = el('canvas', 'mum-katman');
-    this.darkInk = el('canvas', 'mum-katman');
+    this.darkInk = el('canvas', 'mum-katman mum-isikli');
     this.fx = el('canvas', 'mum-alev');
     this.text = el('div', 'mum-yazi');
     this.root.append(this.ambient, this.pale, this.darkInk, this.fx, this.text);
@@ -70,7 +70,9 @@ class CandleScene {
 
     const dpr = Math.min(devicePixelRatio || 1, 2);
     const art = [...this.strokes, ...(this.candleArt || (this.candleArt = CakeArt.candle(c.x, c.y, CH)))];
-    [[this.pale, 'rgba(255,226,186,.3)', null], [this.darkInk, 'rgba(66,32,10,.74)', 'rgba(255,240,170,.3)']].forEach(([cv, color, hi]) => {
+    this.darkInk.style.setProperty('--wx', `${tx}px`);
+    this.darkInk.style.setProperty('--wy', `${ty - this.flameH * 0.4}px`);
+    [[this.pale, 'rgba(255,226,186,.3)', 0], [this.darkInk, 'rgba(58,28,8,.82)', 0.5]].forEach(([cv, color, hi]) => {
       cv.width = Math.round(sw * dpr);
       cv.height = Math.round(sh * dpr);
       const x = cv.getContext('2d');

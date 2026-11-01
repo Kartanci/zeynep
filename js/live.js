@@ -128,8 +128,8 @@ class BrokerLink {
 }
 
 class Live {
-  constructor({ role, onMessage, onPeer, onReady }) {
-    Object.assign(this, { role, onMessage, onPeer, onReady });
+  constructor({ role, onMessage, onPeer, onReady, peerMs = 14000 }) {
+    Object.assign(this, { role, onMessage, onPeer, onReady, peerMs });
     this.id = role + Math.random().toString(36).slice(2, 9);
     this.counter = 0;
     this.seen = new Set();
@@ -164,7 +164,7 @@ class Live {
   }
 
   checkPeer() {
-    const on = Date.now() - this.lastPeer < 13000;
+    const on = Date.now() - this.lastPeer < this.peerMs;
     if (on !== this.peerOnline) {
       this.peerOnline = on;
       if (this.onPeer) this.onPeer(on);

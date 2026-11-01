@@ -10,8 +10,27 @@ function el(tag, cls, html) {
   return n;
 }
 
+// Android'de titreşim, iPhone'da (iOS 18+) anahtar düğmesinin hafif tıkı. Dokunma anı dışında iPhone'da çalışmaz, sorun değil.
+let buzzLast = 0;
 function buzz(ms = 8) {
-  if (navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) {} }
+  if (navigator.vibrate) {
+    try { navigator.vibrate(ms); } catch (e) {}
+    return;
+  }
+  const now = Date.now();
+  if (now - buzzLast < 70) return;
+  buzzLast = now;
+  try {
+    const label = document.createElement('label');
+    label.style.display = 'none';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.setAttribute('switch', '');
+    label.append(input);
+    document.head.append(label);
+    label.click();
+    label.remove();
+  } catch (e) {}
 }
 
 const Pen = (() => {
@@ -80,7 +99,7 @@ const Pen = (() => {
   }
 
   // Yolu kalemle çizer gibi canlandırır; çizim bitince çözülür.
-  function stroke(target, d, { color = 'currentColor', width = 2, dur = 320, delay = 0, step = 6, amp = 0.8, plain = false, opacity = 1 } = {}) {
+  function stroke(target, d, { color = 'currentColor', width = 2, dur = 320, delay = 0, step = 6, amp = 0.8, plain = false, opacity = 1, trace = false } = {}) {
     const p = document.createElementNS(NS, 'path');
     p.setAttribute('d', plain ? d : rough(d, { step, amp }));
     p.setAttribute('fill', 'none');
@@ -99,8 +118,9 @@ const Pen = (() => {
       setTimeout(() => {
         p.style.visibility = '';
         p.getBoundingClientRect();
-        p.style.transition = `stroke-dashoffset ${dur}ms cubic-bezier(.4,.1,.6,.95)`;
+        p.style.transition = `stroke-dashoffset ${dur}ms linear`;
         p.style.strokeDashoffset = 0;
+        if (trace && typeof Scribe !== 'undefined') Scribe.trace(p, len, dur);
         setTimeout(() => res(p), dur);
       }, delay);
     });
@@ -184,7 +204,7 @@ const Doodle = {
       },
       async draw(speed = 1) {
         for (const p of d.paths) {
-          await Pen.stroke(s, p, { color, width, dur: Math.max(70, 240 / d.paths.length * 2) / speed, step: 5, amp: 0.5 });
+          await Pen.stroke(s, p, { color, width, dur: Math.max(70, 240 / d.paths.length * 2) / speed, step: 5, amp: 0.5, trace: true });
         }
       },
     };

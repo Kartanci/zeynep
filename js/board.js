@@ -56,9 +56,28 @@ class Board {
     x.setTransform(this.dpr * this.s, 0, 0, this.dpr * this.s, this.dpr * this.ox, this.dpr * this.oy);
     x.lineCap = 'round';
     x.lineJoin = 'round';
-    x.strokeStyle = st.k === 'f' ? '#ffe94d' : Board.INK[st.o] || Board.INK.z;
-    x.lineWidth = st.k === 'f' ? 38 : Math.max(5.2, 1.7 / this.s);
+    x.strokeStyle = st.k === 'f' ? Board.crayon(x, st.c || '#ffd93b') : Board.INK[st.o] || Board.INK.z;
+    x.lineWidth = st.k === 'f' ? 34 : Math.max(5.2, 1.7 / this.s);
     return x;
+  }
+
+  // Kuru boya izi: renk, grenli ve hafif boşluklu bir dokuyla sürülür.
+  static crayon(x, color) {
+    Board.tiles = Board.tiles || {};
+    if (!Board.tiles[color]) {
+      const t = document.createElement('canvas');
+      t.width = t.height = 96;
+      const c = t.getContext('2d');
+      c.fillStyle = color;
+      c.fillRect(0, 0, 96, 96);
+      c.globalCompositeOperation = 'destination-out';
+      for (let i = 0; i < 2600; i++) {
+        c.fillStyle = `rgba(0,0,0,${rand(0.12, 0.8)})`;
+        c.fillRect(rand(0, 96), rand(0, 96), rand(0.6, 2.2), rand(0.6, 1.6));
+      }
+      Board.tiles[color] = t;
+    }
+    return x.createPattern(Board.tiles[color], 'repeat');
   }
 
   // Noktalar arada kaybolmuşsa boşluğa kadar çizer; kaldığı yerden devam eder.
@@ -126,6 +145,7 @@ class Board {
       const id = `${this.me}${Date.now().toString(36)}${this.count++}`;
       const [x, y] = this.toLogical(e);
       const st = { id, o: this.me, k: this.tool, pts: [x, y] };
+      if (this.tool === 'f') st.c = this.color;
       this.cur = st;
       this.strokes.push(st);
       this.map.set(id, st);
@@ -165,12 +185,14 @@ class Board {
 
   flush(st = this.cur) {
     if (!st || this.sentTo >= st.pts.length) return;
-    this.send({ t: 'd', s: st.id, o: st.o, k: st.k, i: this.sentTo, p: st.pts.slice(this.sentTo) });
+    this.send({ t: 'd', s: st.id, o: st.o, k: st.k, c: st.c, i: this.sentTo, p: st.pts.slice(this.sentTo) });
     this.sentTo = st.pts.length;
   }
 
   bare(st) {
-    return { id: st.id, o: st.o, k: st.k, pts: st.pts, end: true };
+    const out = { id: st.id, o: st.o, k: st.k, pts: st.pts, end: true };
+    if (st.c) out.c = st.c;
+    return out;
   }
 
   export() {
@@ -196,6 +218,7 @@ class Board {
       let st = this.map.get(m.s);
       if (!st) {
         st = { id: m.s, o: m.o, k: m.k, pts: [] };
+        if (m.c) st.c = m.c;
         this.strokes.push(st);
         this.map.set(m.s, st);
       }
@@ -238,6 +261,153 @@ class Board {
     this.finishLine(st);
   }
 }
+
+// Küçük çizim tuvalleri: çizgileri verilen kutuya sığdırır.
+const Sketches = {
+  fit(cv, w, h) {
+    const dpr = Math.min(devicePixelRatio || 1, 2.5);
+    cv.width = w * dpr;
+    cv.height = h * dpr;
+    cv.style.width = `${w}px`;
+    cv.style.height = `${h}px`;
+    const x = cv.getContext('2d');
+    x.scale(dpr, dpr);
+    return x;
+  },
+
+  bounds(art) {
+    let minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9;
+    art.forEach((st) => {
+      for (let i = 0; i < st.pts.length; i += 2) {
+        minX = Math.min(minX, st.pts[i]);
+        maxX = Math.max(maxX, st.pts[i]);
+        minY = Math.min(minY, st.pts[i + 1]);
+        maxY = Math.max(maxY, st.pts[i + 1]);
+      }
+    });
+    return { minX, maxX, minY, maxY };
+  },
+
+  drawFit(x, art, w, h, pad, width) {
+    const b = this.bounds(art);
+    const s = Math.min((w - pad * 2) / (b.maxX - b.minX || 1), (h - pad * 2) / (b.maxY - b.minY || 1));
+    CakeArt.draw(x, art, {
+      s,
+      ox: (w - (b.maxX - b.minX) * s) / 2 - b.minX * s,
+      oy: (h - (b.maxY - b.minY) * s) / 2 - b.minY * s,
+      hi: 0.72,
+      width,
+    });
+  },
+
+  cake(cv, w, h, width = 1.2) {
+    const strokes = (S.pasta && S.pasta.strokes && S.pasta.strokes.length) ? S.pasta.strokes : CakeArt.fallback();
+    const candle = (S.pasta && S.pasta.candle) || { x: 500, y: 830 };
+    const x = this.fit(cv, w, h);
+    this.drawFit(x, [...strokes, ...CakeArt.candle(candle.x, candle.y)], w, h, 6, width);
+  },
+
+  portrait(cv, strokes, w, h, width = 1) {
+    const x = this.fit(cv, w, h);
+    if (strokes && strokes.length) this.drawFit(x, strokes, w, h, 4, width);
+  },
+};
+
+const UCAK_SVG = `
+  <svg viewBox="0 0 120 96" width="120" height="96" aria-hidden="true">
+    <path d="M4 50L116 4L44 66Z" fill="#fffdf7" stroke="#8a8778" stroke-width="1"/>
+    <path d="M116 4L70 92L44 66Z" fill="#f1ecdd" stroke="#8a8778" stroke-width="1"/>
+    <path d="M44 66L52 88L70 92Z" fill="#dcd6c3" stroke="#8a8778" stroke-width="1"/>
+    <path d="M116 4L52 88" stroke="#8a8778" stroke-width=".8" opacity=".7"/>
+  </svg>`;
+
+// Bir çizimin tamamını parçalar halinde yollar; karşı taraf StrokeInbox ile birleştirir.
+function sendStrokes(live, t, strokes) {
+  const size = 12;
+  const list = strokes || [];
+  const n = Math.max(1, Math.ceil(list.length / size));
+  const batch = Math.random().toString(36).slice(2, 8);
+  for (let i = 0; i < n; i++) {
+    setTimeout(() => live.send({ t, batch, i, n, part: list.slice(i * size, (i + 1) * size) }), i * 45);
+  }
+}
+
+class StrokeInbox {
+  add(m) {
+    if (m.batch !== this.batch) {
+      this.batch = m.batch;
+      this.parts = [];
+    }
+    this.parts[m.i] = m.part;
+    this.n = m.n;
+    return this.complete();
+  }
+
+  complete() {
+    if (!this.parts || this.parts.length < this.n) return false;
+    for (let i = 0; i < this.n; i++) if (!this.parts[i]) return false;
+    return true;
+  }
+
+  result() {
+    return this.parts.flat();
+  }
+}
+
+// Dokununca yükselen kuru boya kalemleri ve silgi. İki sayfa da aynısını kullanır.
+const Crayons = {
+  LIST: [
+    { c: '#ffd93b', ad: 'sarı' },
+    { c: '#ff8fae', ad: 'pembe' },
+    { c: '#78c257', ad: 'yeşil' },
+    { c: '#a9673a', ad: 'kahve' },
+  ],
+
+  pencilSvg(color) {
+    return `<svg viewBox="0 0 22 54" width="22" height="54" aria-hidden="true">
+      <path d="M3 14L11 1L19 14Z" fill="#ecc99b"/>
+      <path d="M8.6 5L11 1L13.4 5Z" fill="${color}"/>
+      <path d="M3 14H19V60H3Z" fill="${color}"/>
+      <path d="M8 14V60" stroke="#fff" stroke-opacity=".35" stroke-width="1.4"/>
+      <path d="M14.5 14V60" stroke="#000" stroke-opacity=".14" stroke-width="1.4"/>
+      <path d="M3 14L6.5 11L8 14L11 10.5L14 14L15.8 11L19 14" fill="none" stroke="#000" stroke-opacity=".12" stroke-width=".7"/>
+    </svg>`;
+  },
+
+  penSvg(ink) {
+    return `<svg viewBox="0 0 22 54" width="22" height="54" aria-hidden="true">
+      <path d="M9.6 6L11 0L12.4 6Z" fill="#8b8f95"/>
+      <path d="M6.5 16L9 6H13L15.5 16Z" fill="#e6ebf1" stroke="#7d8793" stroke-width=".6"/>
+      <path d="M6.5 16H15.5V60H6.5Z" fill="#eef2f6" stroke="#7d8793" stroke-width=".6"/>
+      <path d="M10 8H12V60H10Z" fill="${ink}"/>
+    </svg>`;
+  },
+
+  build(board, holder, ink) {
+    const row = el('div', 'boyalar');
+    const pick = (btn, tool, color) => {
+      row.querySelectorAll('.boya').forEach((b) => b.classList.remove('secili'));
+      btn.classList.add('secili');
+      board.tool = tool;
+      if (color) board.color = color;
+      buzz(6);
+    };
+    const pen = el('button', 'boya secili', this.penSvg(ink));
+    pen.setAttribute('aria-label', 'tükenmez kalem');
+    pen.onclick = (e) => { e.stopPropagation(); pick(pen, 'p'); };
+    row.append(pen);
+    this.LIST.forEach(({ c, ad }) => {
+      const b = el('button', 'boya', this.pencilSvg(c));
+      b.setAttribute('aria-label', `${ad} kuru boya`);
+      b.onclick = (e) => { e.stopPropagation(); pick(b, 'f', c); };
+      row.append(b);
+    });
+    const eraser = el('button', 'silgi-dugme', '<i></i>');
+    eraser.setAttribute('aria-label', 'son çizgiyi sil');
+    eraser.onclick = (e) => { e.stopPropagation(); buzz(8); board.undo(); };
+    holder.append(row, eraser);
+  },
+};
 
 // Boş bırakılırsa kullanılan pasta ve mumun çizgileri. Mantıksal tuval koordinatlarında.
 const CakeArt = {
@@ -285,17 +455,19 @@ const CakeArt = {
     CakeArt.draw(x, strokes || [], { s, ox: (w - 1000 * s) / 2, oy: (h - 360 * s) / 2, color: '#d02b27', width: 1.6 });
   },
 
-  // Çizgileri verilen tuvale, verilen renk ve ölçekle çizer.
-  draw(ctx, strokes, { s, ox, oy, color, hi = null, width = 1.8 }) {
+  // Çizgileri verilen tuvale, verilen renk ve ölçekle çizer. hi boya katmanının saydamlığıdır, yoksa boyalar çizilmez.
+  draw(ctx, strokes, { s, ox, oy, color, hi = 0, width = 1.8 }) {
     ctx.save();
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    for (const st of strokes) {
+    const ordered = hi ? [...strokes.filter((st) => st.k === 'f'), ...strokes.filter((st) => st.k !== 'f')] : strokes;
+    for (const st of ordered) {
       if (st.k === 'f' && !hi) continue;
       const p = st.pts;
       if (!p || p.length < 2) continue;
-      ctx.strokeStyle = st.k === 'f' ? hi : color || Board.INK[st.o] || Board.INK.z;
-      ctx.lineWidth = st.k === 'f' ? 38 * s : width;
+      ctx.globalAlpha = st.k === 'f' ? hi : 1;
+      ctx.strokeStyle = st.k === 'f' ? st.c || '#ffd93b' : color || Board.INK[st.o] || Board.INK.z;
+      ctx.lineWidth = st.k === 'f' ? 34 * s : width;
       ctx.beginPath();
       ctx.moveTo(ox + p[0] * s, oy + p[1] * s);
       for (let i = 2; i < p.length - 2; i += 2) {

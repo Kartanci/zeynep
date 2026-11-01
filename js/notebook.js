@@ -1,5 +1,5 @@
 // Zeynep'in defteri
-const STORE_KEY = 'zeynep-defter-v1';
+const STORE_KEY = 'zeynep-defter-v2';
 const params = new URLSearchParams(location.search);
 if (params.has('sifirla')) {
   try { localStorage.removeItem(STORE_KEY); } catch (e) {}
@@ -9,11 +9,13 @@ if (params.has('sifirla')) {
 const FAST = params.has('hizli');
 const PAPER = '#fbf8ee';
 const COVER = '#1d3a86';
+const BOARD = '#2c4a3b';
 
 const S = Object.assign({ page: 'kapak', bozulan: [] }, (() => {
   try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch (e) { return {}; }
 })());
 if (params.get('sayfa')) S.page = params.get('sayfa');
+if (S.page === 'sira') S.bitti = true;
 
 function save() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); } catch (e) {}
@@ -56,11 +58,104 @@ function broadcast() {
       mum: S.mum || null,
       mumSaat: S.mumSaat || null,
       kazilan: S.kazi ? S.kazi.won.map((i) => ICERIK.kuponlar[i]) : [],
+      biletKalan: S.kazi ? S.kazi.order.length - S.kazi.won.length : 0,
       odev: S.odev === undefined ? null : S.odev,
       gorus: S.gorus || null,
+      portre: S.portre ? { bitti: !!S.portre.bitti, asildi: !!S.portre.asildi, ciziyor: !!S.portre.ciziyor } : null,
       bitti: !!S.bitti,
     },
   });
+}
+
+// Harfleri tek tek açılacak parçalara ayırır.
+function splitLetters(node) {
+  const text = node.textContent;
+  node.textContent = '';
+  const out = [];
+  for (const ch of text) {
+    const c = el('span', 'harf');
+    c.textContent = ch === ' ' ? ' ' : ch;
+    c.style.transform = `translateY(${rand(-0.8, 0.8).toFixed(1)}px) rotate(${rand(-2, 2).toFixed(1)}deg)`;
+    node.append(c);
+    out.push(c);
+  }
+  return out;
+}
+
+// Sayfa dışındaki yerlerde (etiket gibi) kalemle yazdırma.
+function revealWithPen(chars, speed, ink) {
+  return new Promise((res) => {
+    if (FAST) {
+      chars.forEach((c) => c.classList.add('v'));
+      return res();
+    }
+    Scribe.begin(ink);
+    let i = 0;
+    let due = performance.now();
+    const step = () => {
+      const now = performance.now();
+      while (i < chars.length && now >= due) {
+        chars[i++].classList.add('v');
+        due += rand(26, 58) / speed;
+      }
+      if (i) Scribe.toChar(chars[i - 1]);
+      if (i < chars.length) setTimeout(step, 16);
+      else {
+        Scribe.idle(350);
+        res();
+      }
+    };
+    step();
+  });
+}
+
+// Karneye damga vurulunca dökülen delgeç pulları. Sitede başka konfeti yok.
+function punchBurst(leaf, origin) {
+  if (FAST) return;
+  const lr = leaf.getBoundingClientRect();
+  const o = origin.getBoundingClientRect();
+  const cv = el('canvas', 'talas');
+  cv.width = lr.width;
+  cv.height = lr.height;
+  leaf.append(cv);
+  const x = cv.getContext('2d');
+  const colors = ['#fffdf6', '#f6f1e2', '#d9e6f1', '#fbf8ee', '#c9dcec'];
+  const bits = [];
+  for (let i = 0; i < 34; i++) {
+    bits.push({
+      x: o.left - lr.left + o.width * Math.random(),
+      y: o.top - lr.top + o.height * Math.random(),
+      vx: rand(-2.6, 2.6),
+      vy: rand(-6.2, -1.4),
+      r: rand(2.4, 4.2),
+      a: rand(0, 6.28),
+      va: rand(0.08, 0.26),
+      c: colors[Math.floor(Math.random() * colors.length)],
+    });
+  }
+  const start = performance.now();
+  const frame = (now) => {
+    x.clearRect(0, 0, cv.width, cv.height);
+    for (const b of bits) {
+      b.vy += 0.17;
+      b.vx *= 0.985;
+      b.x += b.vx;
+      b.y += b.vy;
+      b.a += b.va;
+      const flat = Math.abs(Math.cos(b.a));
+      x.fillStyle = 'rgba(40,30,10,.18)';
+      x.beginPath();
+      x.ellipse(b.x + 1, b.y + 1.4, b.r, Math.max(0.5, b.r * flat), 0, 0, 7);
+      x.fill();
+      x.fillStyle = b.c;
+      x.beginPath();
+      x.ellipse(b.x, b.y, b.r, Math.max(0.5, b.r * flat), 0, 0, 7);
+      x.fill();
+    }
+    if (now - start < 2400) requestAnimationFrame(frame);
+    else cv.remove();
+  };
+  requestAnimationFrame(frame);
 }
 
 function sendBoardDump() {
@@ -100,12 +195,17 @@ class Page {
   }
 
   // Kalemle çizilerek akışa eklenen karalama.
-  async doodle(name, { scale = 1, cls = '', color, width, into = this.body } = {}) {
+  async doodle(name, { scale = 1, cls = '', color, width, into = this.body, pen = true } = {}) {
     const d = Doodle.make(name, { scale, cls, color, width });
     into.append(d.el);
     this.reveal(d.el);
-    if (FAST || this.instant) d.paint();
-    else await d.draw();
+    if (FAST || this.instant) {
+      d.paint();
+      return d.el;
+    }
+    if (pen) Scribe.begin('mavi');
+    await d.draw();
+    if (pen) Scribe.idle();
     return d.el;
   }
 
@@ -119,10 +219,14 @@ class Page {
     return d.el;
   }
 
+  // Tarih defterin açıldığı gün olarak kalır; sonradan bakınca o akşam yazar.
   printDate() {
-    const text = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' }).format(new Date());
+    if (!S.tarih) {
+      S.tarih = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' }).format(new Date());
+      save();
+    }
     const d = el('div', 'tarih');
-    d.textContent = text;
+    d.textContent = S.tarih;
     this.body.append(d);
   }
 
@@ -191,8 +295,9 @@ class Page {
     });
   }
 
-  // Metni harf harf yazar. ~~metin~~ üstü çizilir, ==metin== fosforlanır.
-  async write(text, { cls = '', into = this.body, pause = 240, speed = 1, tag = 'p' } = {}) {
+  // Metni harf harf yazar. ~~metin~~ üstü çizilir, ==metin== fosforlanır. pen: kalem görünerek yazar.
+  async write(text, { cls = '', into = this.body, pause = 240, speed = 1, tag = 'p', pen = false } = {}) {
+    const ink = !pen ? null : cls.includes('enes-el') ? 'siyah' : cls.includes('kirmizi') ? 'kirmizi' : 'mavi';
     const p = el(tag, `el ${cls}`);
     const parts = text.split(/(~~.+?~~|==.+?==)/).filter(Boolean);
     const runs = parts.map((part) => {
@@ -221,19 +326,21 @@ class Page {
     into.append(p);
     this.reveal(p);
     for (const run of runs) {
-      await this.revealChars(run.chars, speed);
-      if (run.struck.length) await this.strike(p, run.struck);
+      await this.revealChars(run.chars, speed, ink);
+      if (run.struck.length) await this.strike(p, run.struck, ink);
     }
+    if (ink) Scribe.idle();
     await this.wait(pause);
     return p;
   }
 
-  revealChars(chars, speed) {
+  revealChars(chars, speed, ink = null) {
     return new Promise((res) => {
       if (FAST || this.instant) {
         chars.forEach((c) => c.classList.add('v'));
         return res();
       }
+      if (ink) Scribe.begin(ink);
       let i = 0;
       let due = performance.now();
       const step = () => {
@@ -249,6 +356,7 @@ class Page {
           const ch = c.textContent;
           due += (ch === '.' || ch === '?' || ch === '!' ? 150 : ch === ',' ? 100 : rand(13, 32)) / speed;
         }
+        if (ink && i) Scribe.toChar(chars[i - 1]);
         if (i < chars.length) setTimeout(step, 16);
         else res();
       };
@@ -256,7 +364,7 @@ class Page {
     });
   }
 
-  async strike(p, words) {
+  async strike(p, words, ink = null) {
     await this.wait(260);
     p.style.position = 'relative';
     const pr = p.getBoundingClientRect();
@@ -274,8 +382,9 @@ class Page {
     for (const l of lines.values()) {
       const x0 = l.x0 - pr.left - 3, x1 = l.x1 - pr.left + 3, y = l.y - pr.top;
       const dur = FAST || this.instant ? 0 : 240;
-      await Pen.stroke(s, `M${x0} ${y + 1}L${x1} ${y - 2}`, { width: 2, dur, step: 12, amp: 0.9 });
-      await Pen.stroke(s, `M${x1 - 2} ${y + 2}L${x0 + 4} ${y + 3}`, { width: 1.6, dur: dur * 0.7, step: 12, amp: 0.9 });
+      if (ink && dur) Scribe.begin(ink);
+      await Pen.stroke(s, `M${x0} ${y + 1}L${x1} ${y - 2}`, { width: 2, dur, step: 12, amp: 0.9, trace: !!ink });
+      await Pen.stroke(s, `M${x1 - 2} ${y + 2}L${x0 + 4} ${y + 3}`, { width: 1.6, dur: dur * 0.7, step: 12, amp: 0.9, trace: !!ink });
     }
   }
 
@@ -347,6 +456,7 @@ class Page {
   done(label = 'sayfayı çevir') {
     if (this.canTurn) return;
     this.canTurn = true;
+    if (S.bitti && this.id !== 'son' && this.id !== 'arka') label = 'sıraya dön';
     const go = (e) => { e.stopPropagation(); Book.next(); };
     const b = el('button', 'cevir');
     const t = el('span');
@@ -366,25 +476,16 @@ class Page {
 }
 
 /* ---------- Sayfalar ---------- */
-const ORDER = ['kapak', 'psst', 'dogumgunu', 'sinav', 'teneffus', 'pasta', 'mum', 'kazi', 'karne', 'son', 'arka'];
+const ORDER = ['kapak', 'psst', 'dogumgunu', 'sinav', 'kazi', 'teneffus', 'portre', 'pasta', 'mum', 'karne', 'son', 'arka'];
 const PAGES = {};
 
+// Sıradan yakınlaşınca görünen tam ekran kapak. Yazılar hazır gelir, hemen ardından çevrilir.
 PAGES.kapak = {
   build(p) {
     p.leaf.classList.add('kapak');
     p.body.remove();
-    p.leaf.innerHTML = `
-      <div class="kapak-sirt"></div>
-      <div class="kapak-parlak"></div>
-      <div class="etiket">
-        <div><span>Adı Soyadı</span><b data-yaz>Zeynep</b></div>
-        <div><span>Sınıfı</span><b data-yaz>${ICERIK.yas}-A</b></div>
-        <div><span>No</span><b data-yaz>1</b></div>
-        <div><span>Dersi</span><b data-yaz>Doğum Günü</b></div>
-        <div><span>Sıra Arkadaşı</span><b data-yaz>Enes</b></div>
-      </div>
-      <div class="daksil">Z + E</div>
-      <div class="postit kapak-not">bunu bende unutmuşsun.<small>(aç)</small></div>`;
+    p.leaf.innerHTML = `${Desk.notebookHtml()}
+      <div class="postit kapak-not v">bunu bende unutmuşsun.<small>(aç)</small></div>`;
     p.leaf.querySelectorAll('[data-yaz]').forEach((b) => {
       const text = b.textContent;
       b.textContent = '';
@@ -404,19 +505,9 @@ PAGES.kapak = {
       `M${W * 0.14} ${H + 10}C${W * 0.2} ${H * 0.86} ${W * 0.34} ${H * 0.8} ${W * 0.42} ${H * 0.72}`,
     ].forEach((d) => Pen.stroke(folds, d, { color: 'rgba(255,255,255,.075)', width: 1.4, dur: 0, step: 28, amp: 1.2 }));
     p.leaf.prepend(folds);
+    p.leaf.querySelectorAll('.harf').forEach((c) => c.classList.add('v'));
   },
-  async run(p) {
-    p.canTurn = true;
-    p.leaf.addEventListener('click', () => Book.next());
-    p.tapped = () => {};
-    const chars = [...p.leaf.querySelectorAll('.harf')];
-    await sleep(FAST ? 0 : 500);
-    await p.revealChars(chars, 0.8);
-    await sleep(FAST ? 0 : 260);
-    const note = p.leaf.querySelector('.kapak-not');
-    note.classList.add('v');
-    setTimeout(() => note.classList.add('oynak'), 2400);
-  },
+  async run() {},
 };
 
 PAGES.psst = {
@@ -458,9 +549,9 @@ PAGES.dogumgunu = {
     await p.wait(700);
     await p.write('sana güzel bir şey yazacaktım.');
     await p.wait(400);
-    await p.write('~~hayatımın anlamı~~');
-    await p.write('~~seninle geçen her gün~~');
-    await p.write('~~gözlerin~~');
+    await p.write('~~hayatımın anlamı~~', { pen: true });
+    await p.write('~~seninle geçen her gün~~', { pen: true });
+    await p.write('~~gözlerin~~', { pen: true });
     await p.wait(500);
     await p.write('yok. olmuyor.');
     await p.wait(700);
@@ -504,9 +595,11 @@ async function drawCrossedHeart(p) {
   p.body.append(row);
   p.reveal(row);
   const dur = FAST ? 0 : 520;
-  await Pen.stroke(s, Pen.shape.heart(8, 6, 40), { width: 2, dur, step: 5, amp: 0.7 });
+  if (dur) Scribe.begin('mavi');
+  await Pen.stroke(s, Pen.shape.heart(8, 6, 40), { width: 2, dur, step: 5, amp: 0.7, trace: true });
   await sleep(FAST ? 0 : 220);
-  await Pen.stroke(s, Pen.shape.zigzag(3, 12, 50, 28, 6), { width: 1.7, dur: dur * 0.7, step: 5, amp: 0.8 });
+  await Pen.stroke(s, Pen.shape.zigzag(3, 12, 50, 28, 6), { width: 1.7, dur: dur * 0.7, step: 5, amp: 0.8, trace: true });
+  Scribe.idle(300);
   const t = el('span');
   row.append(t);
   await p.write('kalp de çizmiştim. fazla oldu.', { into: t, cls: 'kucuk', tag: 'span', pause: 0 });
@@ -567,8 +660,11 @@ PAGES.sinav = {
         const r = Pen.svg(68, 46, 'not-halka');
         box.append(r);
         tail.innerHTML = '';
-        Pen.stroke(r, Pen.shape.ring(34, 23, 29, 18), { color: 'var(--kirmizi)', width: 2.2, dur: FAST ? 0 : 420, step: 6, amp: 0.8 });
-        await p.write(`${score} puan. ${gradeComment(score)}`, { into: tail, cls: 'kirmizi', pause: 200 });
+        const dur = FAST || p.instant ? 0 : 420;
+        if (dur) Scribe.begin('kirmizi');
+        Pen.stroke(r, Pen.shape.ring(34, 23, 29, 18), { color: 'var(--kirmizi)', width: 2.2, dur, step: 6, amp: 0.8, trace: true });
+        await sleep(dur);
+        await p.write(`${score} puan. ${gradeComment(score)}`, { into: tail, cls: 'kirmizi', pause: 200, pen: true });
       }
     };
 
@@ -660,7 +756,7 @@ PAGES.sinav = {
     await examHomework(p, sheet.querySelector('.sinav-odev'));
     await p.wait(400);
     const w = wrongCount();
-    await p.write(w ? `${w} çarpı, ${w} bilet. son sayfalarda.` : 'hiç çarpı yok. vicdanlı öğretmen.', { pause: 100 });
+    await p.write(w ? `${w} çarpı. biletlerin arka sayfada.` : 'hiç çarpı yok. vicdanlı öğretmen.', { pause: 100 });
     p.done();
   },
 };
@@ -725,14 +821,26 @@ async function examHomework(p, box) {
   show(text);
 }
 
+function boardHeader(p) {
+  const row = el('div', 'tahta-ust');
+  row.innerHTML = '<div>Nöbetçi: Zeynep<br>Mevcut: 2 &nbsp;Yok: 0</div>';
+  p.body.append(row);
+  p.printDate();
+  row.append(p.body.lastElementChild);
+}
+
+// Kara tahta: teneffüste sınıfa dönünce tahtada kalan oyun.
 PAGES.teneffus = {
+  build(p) {
+    p.leaf.classList.add('tahta-sayfa');
+    p.leaf.insertAdjacentHTML('beforeend', '<div class="tahta-raf"><i class="tebesir"></i><i class="tebesir kisa"></i><i class="tahta-silgi"></i></div>');
+  },
   async run(p) {
-    p.printDate();
+    boardHeader(p);
     if (S.oyun && S.oyun.bitti) return finishWordGame(p);
-    p.decor('ucak', { right: '14px', bottom: '84px' }, { rotate: -8, scale: 0.9 });
     await p.wait(300);
     await p.write('zil çaldı. teneffüs.', { pause: 60 });
-    await p.doodle('zil', { cls: 'sag zil-karalama', scale: 0.8 });
+    await p.doodle('zil', { cls: 'sag zil-karalama', scale: 0.56, pen: false, width: 2.4 });
     await p.wait(300);
     await p.write('oyun basit. 3-2-1 deyince ikiniz aynı anda bir kelime söylüyorsunuz. herhangi bir kelime.');
     await p.write('aynı çıkmazsa, sonraki turda o iki kelimenin ortasını bulmaya çalışıyorsunuz.');
@@ -740,7 +848,7 @@ PAGES.teneffus = {
     await p.write('aynı kelimeyi söyleyene kadar bitmiyor. sayımı sen yap.');
     await p.choose(["enes'e anlattım, başla"]);
     p.clear();
-    p.printDate();
+    boardHeader(p);
 
     const stage = el('div', 'oyun');
     const tally = Pen.svg(300, 46, 'cetele');
@@ -797,7 +905,7 @@ PAGES.teneffus = {
     save();
     broadcast();
     p.clear();
-    p.printDate();
+    boardHeader(p);
     await finishWordGame(p);
   },
 };
@@ -815,8 +923,157 @@ async function finishWordGame(p) {
     else if (tur <= 6) await p.write('uzun sürdü ama buldunuz.');
     else await p.write('bu kadar uğraşmak da bir şey zaten.');
     await p.wait(300);
-    await p.write('bunu bir kenara yazıyorum.');
+    await p.write('silmiyorum. kenarda kalsın.');
   }
+  p.done('sınıfa dön');
+}
+
+/* ---------- Portre dersi ---------- */
+const PORTRE_SURE = 60;
+
+function polaroids(z, e) {
+  const row = el('div', 'polaroidler');
+  const card = (strokes, title, cls) => {
+    const c = el('div', `polaroid ${cls}`);
+    c.innerHTML = '<div class="polaroid-yuz"><canvas></canvas></div><div class="polaroid-yazi"></div>';
+    c.querySelector('.polaroid-yazi').textContent = title;
+    row.append(c);
+    return { c, strokes };
+  };
+  const items = [
+    card(e, 'Zeynep. Çizen: Enes.', 'sol'),
+    card(z, 'Enes. Çizen: Zeynep.', 'sag'),
+  ];
+  return {
+    row,
+    paint() {
+      items.forEach(({ c, strokes }) => {
+        const box = c.querySelector('.polaroid-yuz');
+        const cv = c.querySelector('canvas');
+        Sketches.portrait(cv, strokes, box.clientWidth, box.clientHeight, 1.5);
+        if (!strokes || !strokes.length) box.classList.add('bos');
+      });
+    },
+    cards: items.map((i) => i.c),
+  };
+}
+
+PAGES.portre = {
+  async run(p) {
+    p.printDate();
+    if (S.portre && S.portre.bitti) return portraitResult(p, false);
+    await p.wait(250);
+    await p.write('resim dersi.');
+    await p.wait(300);
+    await p.write('birbirinizi çizeceksiniz. sen onu, o seni. bir dakikanız var.');
+    await p.write('birbirinizinkini görmek yok. süre bitince ikisi aynı anda açılır.');
+    if (!Book.live.peerOnline) {
+      await p.write("enes'in kalemi burada değil gibi. sen yine de çiz, o da kağıda çizip kameraya göstersin.", { cls: 'kucuk' });
+    }
+    const a = await p.choose(['hazırız', 'bu ders asıldı']);
+    if (a === 1) {
+      S.portre = { bitti: true, asildi: true };
+      save();
+      broadcast();
+      await p.write('devamsızlığına işledim. bir gün.');
+      p.done();
+      return;
+    }
+    await drawPortrait(p);
+    await portraitResult(p, true);
+  },
+};
+
+async function drawPortrait(p) {
+  p.clear();
+  p.body.classList.add('sabit');
+  const head = el('div', 'pasta-ust portre-ust');
+  const title = el('div', 'portre-baslik');
+  const clock = el('div', 'portre-sure');
+  head.append(title, clock);
+  const wrap = el('div', 'tuval');
+  const tools = el('div', 'araclar');
+  p.body.append(head, wrap, tools);
+
+  const board = new Board(wrap, { me: 'z', W: 1000, H: 1200 });
+  board.active = false;
+  Crayons.build(board, tools, Board.INK.z);
+  const fin = el('button', 'kucuk-dugme ana', 'bitti');
+  tools.append(fin);
+
+  S.portre = { z: null, e: null, ciziyor: true };
+  broadcast();
+  for (let i = 0; i < 3; i++) setTimeout(() => Book.live.send({ t: 'portre-basla' }), i * 700);
+  for (const n of ['3', '2', '1']) {
+    clock.textContent = n;
+    buzz(6);
+    await sleep(FAST ? 10 : 800);
+  }
+  title.textContent = "enes'i çiz.";
+  board.active = true;
+  await new Promise((res) => {
+    let left = FAST ? 1 : PORTRE_SURE;
+    clock.textContent = left;
+    const timer = setInterval(() => {
+      left -= 1;
+      clock.textContent = left;
+      clock.classList.toggle('az', left <= 10);
+      if (left <= 10) buzz(4);
+      if (left <= 0) stop();
+    }, 1000);
+    function stop() {
+      clearInterval(timer);
+      Book.onPortreEnd = null;
+      res();
+    }
+    Book.onPortreEnd = stop;
+    fin.onclick = (e) => { e.stopPropagation(); stop(); };
+  });
+  board.active = false;
+  clock.textContent = '0';
+  title.textContent = 'kalemler bırakılsın.';
+  tools.innerHTML = '';
+  Book.live.send({ t: 'portre-son' });
+
+  S.portre.z = board.export();
+  S.portre.ciziyor = false;
+  save();
+  sendStrokes(Book.live, 'portre', S.portre.z);
+  if (Book.live.peerOnline && !S.portre.e && !FAST) {
+    await new Promise((res) => {
+      Book.onPortreGeldi = res;
+      setTimeout(res, 7000);
+    });
+    Book.onPortreGeldi = null;
+  }
+  S.portre.bitti = true;
+  save();
+  broadcast();
+  p.body.classList.remove('sabit');
+  p.clear();
+  p.printDate();
+}
+
+async function portraitResult(p, animate) {
+  const { z, e, asildi } = S.portre;
+  if (asildi) {
+    await p.write('bu ders asıldı.');
+    p.done();
+    return;
+  }
+  const pol = polaroids(z, e);
+  if (animate && !FAST) pol.cards.forEach((c) => c.classList.add('ters'));
+  p.body.append(pol.row);
+  pol.paint();
+  if (animate && !FAST) {
+    for (const n of ['üç.', 'iki.', 'bir.']) {
+      await p.write(n, { cls: 'kucuk sayim', pause: 420, speed: 0.6 });
+    }
+    pol.cards.forEach((c, i) => setTimeout(() => { c.classList.remove('ters'); buzz(14); }, i * 320));
+    await p.wait(1300);
+  }
+  await p.write('sınıf fotoğrafı.', { pause: 300 });
+  await p.write(e && e.length ? 'okul yönetimi sorumluluk kabul etmez.' : "enes'inki gelmedi. ödevini getirmemiş.", { cls: 'kucuk', pause: 200 });
   p.done();
 }
 
@@ -846,24 +1103,14 @@ PAGES.pasta = {
     });
     Book.board = board;
 
-    const undo = el('button', 'kucuk-dugme', 'geri al');
-    undo.onclick = (e) => { e.stopPropagation(); buzz(8); board.undo(); };
-    const hi = el('button', 'kucuk-dugme fosfor-dugme', 'fosforlu');
-    hi.onclick = (e) => {
-      e.stopPropagation();
-      buzz(8);
-      board.tool = board.tool === 'p' ? 'f' : 'p';
-      hi.classList.toggle('secili', board.tool === 'f');
-    };
+    Crayons.build(board, tools, Board.INK.z);
     const fin = el('button', 'kucuk-dugme ana', 'bitti');
-    tools.append(undo, hi, fin);
+    tools.append(fin);
 
     const finished = new Promise((res) => { fin.onclick = (e) => { e.stopPropagation(); res(); }; });
-    await p.write('pasta ~~var~~ yok. çizeceksiniz.', { into: head, pause: 80 });
+    await p.write('pasta ~~var~~ yok. barışın, çizin.', { into: head, pause: 80 });
     await p.write(
-      Book.live.peerOnline
-        ? 'enes de bu sayfada. kırmızı kalem onun.'
-        : 'enes tarif etsin, sen çiz. kötü olursa suç onun.',
+      Book.live.peerOnline ? 'enes de bu sayfada. kırmızı kalem onun.' : 'enes tarif etsin, sen çiz.',
       { into: head, cls: 'kucuk', pause: 0 },
     );
     await finished;
@@ -989,7 +1236,10 @@ PAGES.mum = {
   async run(p) {
     p.printDate();
     S.pasta = S.pasta || { strokes: [], candle: null };
-    if (S.mum === 'sondu') return afterCandle(p);
+    if (S.mum === 'sondu') {
+      Book.next();
+      return;
+    }
 
     await p.wait(300);
     await p.write('son bir şey.');
@@ -1072,68 +1322,51 @@ PAGES.mum = {
       scene.text.querySelector('button').onclick = (e) => { e.stopPropagation(); res(); };
     });
     p.clear();
-    p.printDate();
     setTheme(PAPER);
     Book.scene = null;
     Book.onLight = Book.onBlow = null;
     await scene.close(FAST ? 50 : 1500);
     Notes.next();
-    await afterCandle(p);
+    Book.next();
   },
 };
 
-async function afterCandle(p) {
-  await p.wait(300);
-  await p.write('tamam.');
-  await p.wait(500);
-  await p.write('yeter bu kadar duygusallık.');
-  p.done();
+/* ---------- Kazı kazan: ilk bilet sınavdan hemen sonra, kalanı en sonda sırada ---------- */
+function prepareTickets() {
+  if (S.kazi) return;
+  const all = ICERIK.kuponlar;
+  const total = clamp(wrongCount() + 2, 2, all.length);
+  const rest = all.slice(0, -1).map((_, i) => i).sort(() => Math.random() - 0.5);
+  S.kazi = { order: [...rest.slice(0, total - 1), all.length - 1], won: [] };
+  save();
 }
 
 PAGES.kazi = {
   async run(p) {
     p.printDate();
-    const all = ICERIK.kuponlar;
-    if (!S.kazi) {
-      const w = wrongCount();
-      const total = clamp(w + 2, 2, all.length);
-      const rest = all.slice(0, -1).map((_, i) => i).sort(() => Math.random() - 0.5);
-      S.kazi = { order: [...rest.slice(0, total - 1), all.length - 1], won: [] };
-      save();
+    prepareTickets();
+    const total = S.kazi.order.length;
+    const w = wrongCount();
+    await p.wait(250);
+    await p.write(w ? `her çarpı bir bilet. ${total - w > 0 ? `${total - w} tane de benden. ` : ''}toplam ${total}.` : `çarpı yok ama doğum günü. ${total} bilet benden.`, { pause: 160 });
+    await p.write('biri şimdi. gerisi sonra, sıranın üstünde duracak.', { pause: 160 });
+    if (!S.kazi.won.length) {
+      const hall = el('div', 'bilet-alani');
+      p.body.append(hall);
+      const flakes = el('canvas', 'talas');
+      p.leaf.append(flakes);
+      await scratchTicket(p, hall, S.kazi.order[0], flakes, 1, total, null);
+    } else {
+      const li = el('div', 'kazinan-not');
+      li.textContent = ICERIK.kuponlar[S.kazi.won[0]];
+      p.body.append(li);
     }
-    const left = () => S.kazi.order.filter((i) => !S.kazi.won.includes(i));
-    if (left().length) {
-      const w = wrongCount();
-      await p.wait(250);
-      await p.write(w ? `sınavdaki her çarpı bir bilet. ${S.kazi.order.length - w ? `${S.kazi.order.length - w} tane de benden.` : ''}` : 'çarpı yok ama doğum günü. iki bilet benden.', { pause: 120 });
-    }
-    const hall = el('div', 'bilet-alani');
-    p.body.append(hall);
-    const flakes = el('canvas', 'talas');
-    p.leaf.append(flakes);
-    for (const i of left()) {
-      await scratchTicket(p, hall, i, flakes, S.kazi.order.indexOf(i) + 1, S.kazi.order.length);
-    }
-    flakes.remove();
-    hall.remove();
-    p.clear();
-    p.printDate();
-    await p.write(S.kazi.won.length > 1 ? 'bunların hepsi senin.' : 'bu senin.');
-    const list = el('ul', 'kupon-liste');
-    S.kazi.won.forEach((i) => {
-      const li = el('li');
-      li.textContent = all[i];
-      list.append(li);
-    });
-    p.body.append(list);
-    p.reveal(list);
-    await p.wait(500);
-    await p.write('son sayfada bozdurma yeri var. enes kaçamaz.');
     p.done();
   },
 };
 
-function scratchTicket(p, hall, index, flakes, no, total) {
+// Bilet kazınınca çözülür. Düğme yazısı verilirse kullanıcı basınca bilet gider, verilmezse olduğu yerde kalır.
+function scratchTicket(p, hall, index, flakes, no, total, nextLabel) {
   return new Promise((res) => {
     const prize = ICERIK.kuponlar[index];
     const t = el('div', 'bilet');
@@ -1153,7 +1386,8 @@ function scratchTicket(p, hall, index, flakes, no, total) {
       save();
       broadcast();
       buzz(30);
-      const b = el('button', 'kucuk-dugme ana bilet-sonraki', no < total ? 'sıradaki bilet' : 'tamam');
+      if (!nextLabel) return res();
+      const b = el('button', 'kucuk-dugme ana bilet-sonraki', nextLabel);
       hall.append(b);
       p.reveal(b);
       b.onclick = async (e) => {
@@ -1335,8 +1569,10 @@ PAGES.karne = {
     const o = S.oyun;
     const kelime = !o ? '-' : o.pes ? `${o.tur} tur, zil çaldı` : o.kelime ? `${o.tur}. turda "${o.kelime}"` : `${o.tur}. turda`;
     const kas = S.kas === 'demedi' ? '5 (o fark etmedi)' : S.kas === 'gormuyor' ? '5 (görüntü dondu)' : '5';
+    const absent = S.portre && S.portre.asildi ? '1 gün (resim dersi)' : '0 gün';
     const card = el('div', 'karne');
     card.innerHTML = `
+      <div class="karne-kat"></div>
       <div class="karne-baslik">Karne</div>
       <div class="karne-alt">Öğrenci: <b>Zeynep</b> &nbsp; Sınıfı: <b>${ICERIK.yas}-A</b> &nbsp; No: <b>1</b></div>
       <table>
@@ -1375,12 +1611,12 @@ PAGES.karne = {
     }
     p.body.append(card);
     requestAnimationFrame(() => card.classList.add('v'));
-    drawThumb(card.querySelector('.karne-resim canvas'));
+    Sketches.cake(card.querySelector('.karne-resim canvas'), 118, 66, 1.1);
     const sign = card.querySelector('.karne-imza');
     if (S.imza && S.imza.length) CakeArt.signature(sign.querySelector('canvas'), S.imza, 120, 44);
     else sign.hidden = true;
 
-    const values = [kas, score === null ? '-' : `Enes'e ${score} verdi`, kelime, S.mumSaat ? `saat ${S.mumSaat}` : '5', 'Pekiyi', '0 gün'];
+    const values = [kas, score === null ? '-' : `Enes'e ${score} verdi`, kelime, S.mumSaat ? `saat ${S.mumSaat}` : '5', 'Pekiyi', absent];
     const cells = card.querySelectorAll('[data-v]');
     await p.wait(450);
     for (let i = 0; i < cells.length; i++) {
@@ -1394,8 +1630,10 @@ PAGES.karne = {
     await p.wait(500);
     card.querySelector('.karne-takdir').classList.add('v');
     await p.wait(600);
-    card.querySelector('.damga').classList.add('v');
+    const stamp = card.querySelector('.damga');
+    stamp.classList.add('v');
     buzz(40);
+    if (!p.instant) setTimeout(() => punchBurst(p.leaf, stamp), 170);
     await p.wait(500);
     p.done();
   },
@@ -1407,7 +1645,7 @@ function showOpinion(fresh = false) {
   if (!k || !k.box.isConnected) return false;
   k.box.innerHTML = '';
   if (S.gorus) {
-    k.page.write(S.gorus, { into: k.box, cls: 'enes-el gorus', pause: 0, speed: fresh ? 0.7 : 3 });
+    k.page.write(S.gorus, { into: k.box, cls: 'enes-el gorus', pause: 0, speed: fresh ? 0.7 : 3, pen: fresh });
   } else {
     const t = el('span', 'gorus-bos');
     t.textContent = Book.live.peerOnline ? 'enes yazıyor...' : 'yazacaktı, unuttu.';
@@ -1416,70 +1654,176 @@ function showOpinion(fresh = false) {
   return true;
 }
 
-function drawThumb(cv) {
-  const strokes = (S.pasta && S.pasta.strokes && S.pasta.strokes.length) ? S.pasta.strokes : CakeArt.fallback();
-  const candle = (S.pasta && S.pasta.candle) || { x: 500, y: 830 };
-  const art = [...strokes, ...CakeArt.candle(candle.x, candle.y)];
-  let minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9;
-  art.forEach((st) => {
-    for (let i = 0; i < st.pts.length; i += 2) {
-      minX = Math.min(minX, st.pts[i]);
-      maxX = Math.max(maxX, st.pts[i]);
-      minY = Math.min(minY, st.pts[i + 1]);
-      maxY = Math.max(maxY, st.pts[i + 1]);
-    }
-  });
-  const w = 118, h = 66;
-  const dpr = Math.min(devicePixelRatio || 1, 2.5);
-  cv.width = w * dpr;
-  cv.height = h * dpr;
-  cv.style.width = `${w}px`;
-  cv.style.height = `${h}px`;
-  const x = cv.getContext('2d');
-  x.scale(dpr, dpr);
-  const s = Math.min((w - 8) / (maxX - minX || 1), (h - 8) / (maxY - minY || 1));
-  CakeArt.draw(x, art, {
-    s,
-    ox: (w - (maxX - minX) * s) / 2 - minX * s,
-    oy: (h - (maxY - minY) * s) / 2 - minY * s,
-    hi: 'rgba(255,233,77,.6)',
-    width: 1.1,
-  });
-}
-
 PAGES.son = {
   async run(p) {
     p.printDate();
-    const seen = S.bitti;
-    p.instant = !!seen;
-    S.bitti = true;
+    p.instant = !!S.sonGoruldu;
+    await p.wait(500);
+    await p.write('hani güzel bir şey yazamamıştım ya.', { pause: 1000 });
+    await p.write('o yazmış.', { pause: 1200 });
+    for (const line of ICERIK.enesNotu) await p.write(line, { cls: 'enes-el', pause: 420, speed: 0.85, pen: true });
+    await p.write('Enes', { cls: 'enes-el imza', pause: 500, speed: 0.6, pen: true });
+    S.sonGoruldu = true;
     save();
-    broadcast();
-    await p.wait(400);
-    for (const line of ICERIK.enesNotu) await p.write(line, { cls: 'enes-el', pause: 320, speed: 0.75 });
-    await p.wait(700);
-    await p.write('iyi ki doğdun.', { cls: 'enes-el buyuk', pause: 300, speed: 0.55 });
-    await p.write('Enes', { cls: 'enes-el imza', pause: 900, speed: 0.6 });
-    const ps = S.kas === 'dedi'
-      ? 'p.s. enes baştan beri her sayfada ne yapacağını biliyordu, önünde kopya kağıdı vardı. kaşını kaldırdığında "ne oldu" demesi de roldü.'
-      : 'p.s. enes baştan beri her sayfada ne yapacağını biliyordu, önünde kopya kağıdı vardı.';
-    await p.write(ps, { cls: 'ps', pause: 500 });
-    p.decor('dumanli', { right: '20px', bottom: '74px' }, { scale: 0.72, rotate: 3, color: 'var(--kursun)', width: 1.7 });
-    const links = el('div', 'son-baglantilar');
-    const mk = (text, target) => {
-      const b = el('button', 'kucuk-dugme');
-      b.textContent = text;
-      b.onclick = (e) => { e.stopPropagation(); Book.flipTo(target); };
-      links.append(b);
-    };
-    if (S.kazi && S.kazi.won.length) mk('kuponlarım', 'kuponlar');
-    mk('karnem', 'karne');
-    p.body.append(links);
-    p.reveal(links);
     p.instant = false;
+    replyArea(p);
     p.done();
   },
 };
+
+/* ---------- Kağıt uçak: notun altına Zeynep'in cevabı. Yazmak zorunlu değil. ---------- */
+function replyArea(p) {
+  const box = el('div', 'cevap');
+  box.innerHTML = '<div class="cevap-etiket">cevap:</div><div class="cevap-kagit"></div><div class="cevap-alt"></div>';
+  p.body.append(box);
+  const paper = box.querySelector('.cevap-kagit');
+  const foot = box.querySelector('.cevap-alt');
+  const status = (text) => {
+    foot.innerHTML = '';
+    const s = el('div', 'cevap-durum');
+    s.textContent = text;
+    foot.append(s);
+  };
+  if (S.cevap) {
+    const cv = el('canvas');
+    paper.append(cv);
+    const w = paper.clientWidth, h = paper.clientHeight;
+    const x = Sketches.fit(cv, w, h);
+    const s = Math.min(w / 1000, h / 420);
+    CakeArt.draw(x, S.cevap, { s, ox: (w - 1000 * s) / 2, oy: (h - 420 * s) / 2, width: 1.7 });
+    status(S.cevapOk ? 'ulaştı.' : "enes'in hattı kapalı. açılınca kendi gider.");
+    return;
+  }
+  const area = el('div', 'tuval cevap-ped');
+  paper.append(area);
+  const make = el('button', 'kucuk-dugme');
+  make.textContent = 'kağıt uçak yap';
+  make.hidden = true;
+  foot.append(make);
+  const board = new Board(area, {
+    me: 'z',
+    W: 1000,
+    H: 420,
+    onChange: (all) => {
+      make.hidden = !all.length;
+      if (all.length) p.reveal(make);
+    },
+  });
+  make.onclick = async (e) => {
+    e.stopPropagation();
+    board.active = false;
+    make.hidden = true;
+    const strokes = board.export();
+    const thrown = await foldAndThrow(paper, foot);
+    if (!thrown) return;
+    S.cevap = strokes;
+    save();
+    status('uçuyor...');
+    const reached = await deliverPlane(strokes);
+    S.cevapOk = reached;
+    save();
+    status(reached ? 'ulaştı.' : "enes'in hattı kapalı. açılınca kendi gider.");
+  };
+}
+
+// Kağıt uçağa dönüşür, parmakla yukarı fırlatılır.
+function foldAndThrow(paper, foot) {
+  return new Promise((res) => {
+    const root = Book.root;
+    const rr = root.getBoundingClientRect();
+    const pr = paper.getBoundingClientRect();
+    const plane = el('div', 'ucak', UCAK_SVG);
+    const startX = pr.left - rr.left + pr.width / 2 - 60;
+    const startY = clamp(pr.top - rr.top + pr.height / 2 - 48, 60, rr.height - 180);
+    let px = startX, py = startY;
+    const put = (extra = '') => { plane.style.transform = `translate(${px}px,${py}px) ${extra}`; };
+    put('scale(.2) rotate(-14deg)');
+    plane.style.opacity = 0;
+    root.append(plane);
+    paper.classList.add('katlaniyor');
+    buzz(10);
+    plane.getBoundingClientRect();
+    plane.classList.add('katlandi');
+    put('scale(1) rotate(0deg)');
+    plane.style.opacity = 1;
+    foot.innerHTML = '';
+    const hint = el('div', 'cevap-durum');
+    hint.textContent = 'yukarı fırlat.';
+    foot.append(hint);
+
+    let pid = null, sx = 0, sy = 0, ox = 0, oy = 0, lastY = 0, lastT = 0, vy = 0;
+    const fly = () => {
+      plane.classList.remove('katlandi', 'tutuldu');
+      plane.classList.add('uctu');
+      buzz(20);
+      const tx = rr.width * rand(0.62, 0.9);
+      const dur = FAST ? 10 : 1050;
+      plane.animate([
+        { transform: `translate(${px}px,${py}px) rotate(0deg) scale(1)` },
+        { transform: `translate(${(px + tx) / 2}px,${py * 0.55 - 20}px) rotate(-16deg) scale(.86)`, offset: 0.45 },
+        { transform: `translate(${tx}px,-170px) rotate(10deg) scale(.42)` },
+      ], { duration: dur, easing: 'cubic-bezier(.35,.1,.6,.9)', fill: 'forwards' });
+      setTimeout(() => {
+        plane.remove();
+        res(true);
+      }, dur + 30);
+    };
+    plane.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      pid = e.pointerId;
+      try { plane.setPointerCapture(pid); } catch (err) {}
+      sx = e.clientX;
+      sy = e.clientY;
+      ox = px;
+      oy = py;
+      lastY = e.clientY;
+      lastT = e.timeStamp;
+      plane.classList.remove('katlandi');
+      plane.classList.add('tutuldu');
+    });
+    plane.addEventListener('pointermove', (e) => {
+      if (e.pointerId !== pid) return;
+      px = ox + e.clientX - sx;
+      py = oy + e.clientY - sy;
+      vy = (e.clientY - lastY) / Math.max(1, e.timeStamp - lastT);
+      lastY = e.clientY;
+      lastT = e.timeStamp;
+      put('rotate(-6deg)');
+    });
+    const up = (e) => {
+      if (e.pointerId !== pid) return;
+      pid = null;
+      plane.classList.remove('tutuldu');
+      if (py < oy - 26 || vy < -0.25 || Math.hypot(e.clientX - sx, e.clientY - sy) < 8) {
+        fly();
+      } else {
+        px = ox;
+        py = oy;
+        plane.classList.add('katlandi');
+        put('scale(1) rotate(0deg)');
+      }
+    };
+    plane.addEventListener('pointerup', up);
+    plane.addEventListener('pointercancel', up);
+  });
+}
+
+// Uçak ancak Enes'in ekranına düşünce ulaşmış sayılır.
+function deliverPlane(strokes) {
+  return new Promise((res) => {
+    let settled = false;
+    const finish = (ok) => {
+      if (settled) return;
+      settled = true;
+      Book.onPlaneAck = null;
+      res(ok);
+    };
+    Book.onPlaneAck = () => finish(true);
+    sendStrokes(Book.live, 'ucak', strokes);
+    setTimeout(() => finish(false), FAST ? 50 : 6500);
+  });
+}
 
 PAGES.arka = {
   build(p) {
@@ -1502,21 +1846,37 @@ PAGES.arka = {
       row.append(note);
       sheet.append(row);
       await p.wait(320);
-      await p.write(ICERIK.carpim[i], { into: note, tag: 'span', pause: 650, speed: 0.8 });
+      await p.write(ICERIK.carpim[i], { into: note, tag: 'span', pause: 650, speed: 0.8, pen: true });
     }
     S.arkaGoruldu = true;
     save();
     p.instant = false;
-    p.done('başa dön');
+    p.done('defteri kapat');
   },
 };
 
+/* ---------- Sıradan açılan sayfalar ---------- */
 PAGES.kuponlar = {
   async run(p) {
     p.printDate();
+    prepareTickets();
+    const left = () => S.kazi.order.filter((i) => !S.kazi.won.includes(i));
+    if (left().length) {
+      const hall = el('div', 'bilet-alani');
+      p.body.append(hall);
+      const flakes = el('canvas', 'talas');
+      p.leaf.append(flakes);
+      while (left().length) {
+        const i = left()[0];
+        const more = left().length > 1;
+        await scratchTicket(p, hall, i, flakes, S.kazi.won.length + 1, S.kazi.order.length, more ? 'sıradaki bilet' : 'tamam');
+      }
+      flakes.remove();
+      hall.remove();
+    }
     await p.write('bozdurmak için bas. enes kaçamaz.', { pause: 100 });
     const list = el('ul', 'kupon-liste bozdurma');
-    (S.kazi ? S.kazi.won : []).forEach((i) => {
+    S.kazi.won.forEach((i) => {
       const text = ICERIK.kuponlar[i];
       const li = el('li');
       const t = el('span');
@@ -1529,26 +1889,77 @@ PAGES.kuponlar = {
       };
       b.textContent = 'bozdur';
       if (S.bozulan.includes(i)) mark();
-      b.onclick = async (e) => {
+      b.onclick = (e) => {
         e.stopPropagation();
-        const msg = `Kupon bozduruyorum: ${text}\n\nİtiraz hakkın yok.`;
-        try {
-          if (navigator.share) await navigator.share({ text: msg });
-          else window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
-        } catch (err) {
-          return;
-        }
-        S.bozulan.push(i);
-        save();
-        mark();
-        Book.live.send({ t: 'bozdu', metin: text });
+        redeemSlip(text, () => {
+          S.bozulan.push(i);
+          save();
+          mark();
+        });
       };
       li.append(t, b);
       list.append(li);
     });
     p.body.append(list);
     p.reveal(list);
-    p.done('geri dön');
+    p.done();
+  },
+};
+
+// Kuponu bozdururken kesilen kantin fişi: ne zaman olacağını yazar, Enes'e gönderir.
+function redeemSlip(text, onDone) {
+  const veil = el('div', 'not-perde fis-perde');
+  const fis = el('form', 'fis');
+  const no = String(1000 + Math.floor(Math.random() * 8999));
+  const today = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date());
+  fis.innerHTML = `
+    <div class="fis-baslik">Enes Kantini</div>
+    <div class="fis-satir"><span>Fiş No</span><span>${no}</span></div>
+    <div class="fis-satir"><span>Tarih</span><span>${today}</span></div>
+    <div class="fis-cizgi"></div>
+    <div class="fis-kupon"></div>
+    <div class="fis-cizgi"></div>
+    <div class="fis-satir"><span>Tutar</span><span>0,00 TL</span></div>
+    <label class="fis-zaman">Ne zaman?<input maxlength="40" autocomplete="off" placeholder="cumartesi, mesela"></label>
+    <div class="fis-dugmeler">
+      <button type="button" class="kalem-baglanti">vazgeç</button>
+      <button class="kucuk-dugme ana">enes'e gönder</button>
+    </div>`;
+  fis.querySelector('.fis-kupon').textContent = text;
+  veil.append(fis);
+  Book.root.append(veil);
+  requestAnimationFrame(() => veil.classList.add('v'));
+  fis.querySelector('.kalem-baglanti').onclick = (e) => { e.stopPropagation(); veil.remove(); };
+  fis.onsubmit = async (e) => {
+    e.preventDefault();
+    const when = fis.querySelector('input').value.trim();
+    const msg = `Kupon bozduruyorum: ${text}${when ? `\nNe zaman: ${when}` : ''}\n\nFiş no ${no}. İtiraz hakkın yok.`;
+    try {
+      if (navigator.share) await navigator.share({ text: msg });
+      else window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+    } catch (err) {
+      return;
+    }
+    Book.live.send({ t: 'bozdu', metin: text, zaman: when });
+    veil.remove();
+    onDone();
+  };
+}
+
+PAGES.resimler = {
+  async run(p) {
+    p.printDate();
+    const sheet = el('div', 'resim-kagit');
+    sheet.innerHTML = '<div class="bant"></div><canvas></canvas>';
+    p.body.append(sheet);
+    const w = sheet.clientWidth - 16;
+    Sketches.cake(sheet.querySelector('canvas'), w, Math.round(w * 0.86), 1.8);
+    if (S.portre && !S.portre.asildi && (S.portre.z || S.portre.e)) {
+      const pol = polaroids(S.portre.z, S.portre.e);
+      p.body.append(pol.row);
+      pol.paint();
+    }
+    p.done();
   },
 };
 
@@ -1578,7 +1989,7 @@ const Notes = {
       Book.root.append(veil);
       requestAnimationFrame(() => veil.classList.add('v'));
       const writer = new Page('not');
-      await writer.write(text, { into: paper, cls: 'enes-el', pause: 0, speed: 0.8 });
+      await writer.write(text, { into: paper, cls: 'enes-el', pause: 0, speed: 0.8, pen: true });
       const close = (ev) => {
         ev.stopPropagation();
         veil.remove();
@@ -1628,16 +2039,19 @@ const Book = {
   makePage(id) {
     const p = new Page(id);
     const def = PAGES[id];
-    if (id !== 'kapak' && id !== 'arka') p.drawMargin();
+    if (!['kapak', 'arka', 'teneffus'].includes(id)) p.drawMargin();
     if (def.build) def.build(p);
     return p;
   },
 
   themeFor(id) {
-    return id === 'kapak' || id === 'arka' ? COVER : PAPER;
+    if (id === 'kapak' || id === 'arka') return COVER;
+    if (id === 'teneffus') return BOARD;
+    return PAPER;
   },
 
   runPage(p) {
+    if (S.bitti && !['kuponlar', 'son', 'arka'].includes(p.id)) p.instant = true;
     PAGES[p.id].run(p).catch((e) => console.error(e));
   },
 
@@ -1649,10 +2063,77 @@ const Book = {
     this.runPage(p);
   },
 
+  // Sıradaki defter yakınlaşır, kapak açılır.
+  async openNotebook() {
+    Scribe.setHome(null);
+    Scribe.away();
+    const p = this.makePage('kapak');
+    p.leaf.classList.add('sakli');
+    this.root.append(p.leaf);
+    this.current = p;
+    await Desk.zoomTo(p.leaf);
+    p.leaf.classList.remove('sakli');
+    await sleep(FAST ? 0 : 240);
+    Desk.clear();
+    setTheme(COVER);
+    await sleep(FAST ? 0 : 120);
+    this.flipTo('psst');
+  },
+
+  // Sıradaki bir eşyaya dokununca sayfa o eşyanın yerinden büyüyerek açılır.
+  async fromDesk(id, node) {
+    if (this.flipping) return;
+    this.flipping = true;
+    Scribe.setHome(null);
+    const r = node.getBoundingClientRect();
+    const rr = this.root.getBoundingClientRect();
+    const p = this.makePage(id);
+    const { leaf } = p;
+    leaf.style.transformOrigin = '0 0';
+    leaf.style.transform = `translate(${r.left - rr.left}px,${r.top - rr.top}px) scale(${r.width / rr.width},${r.height / rr.height})`;
+    leaf.style.opacity = '0.3';
+    this.root.append(leaf);
+    leaf.getBoundingClientRect();
+    leaf.style.transition = 'transform .44s cubic-bezier(.3,.7,.2,1), opacity .22s';
+    leaf.style.transform = 'none';
+    leaf.style.opacity = '1';
+    setTheme(this.themeFor(id));
+    await sleep(FAST ? 0 : 450);
+    leaf.style.transition = '';
+    leaf.style.transform = '';
+    leaf.style.transformOrigin = '';
+    leaf.style.opacity = '';
+    this.current = p;
+    this.flipping = false;
+    S.page = id;
+    save();
+    broadcast();
+    this.runPage(p);
+  },
+
+  // Defter kapanır, o akşamdan kalan her şey sıranın üstüne döner.
+  async toDesk() {
+    if (this.flipping || !this.current) return;
+    this.flipping = true;
+    const first = !S.bitti;
+    S.bitti = true;
+    S.page = 'sira';
+    save();
+    broadcast();
+    Desk.full(first, (id, node) => this.fromDesk(id, node));
+    setTheme(WOOD);
+    const { leaf } = this.current;
+    leaf.classList.add('masaya-don');
+    await sleep(FAST ? 0 : first ? 620 : 420);
+    leaf.remove();
+    this.current = null;
+    this.flipping = false;
+  },
+
   nextId() {
     const cur = this.current.id;
-    if (cur === 'kapak') return S.bitti ? 'son' : 'psst';
-    if (cur === 'kuponlar' || cur === 'karne' || cur === 'arka') return 'son';
+    if (cur === 'arka') return 'sira';
+    if (S.bitti && cur !== 'son') return 'sira';
     return ORDER[ORDER.indexOf(cur) + 1];
   },
 
@@ -1714,6 +2195,7 @@ const Book = {
     if (this.flipping) return;
     this.flipping = true;
     buzz(6);
+    Scribe.away();
     this.prepare(id);
     setTheme(this.themeFor(id));
     await this.animate(0, -92, 720);
@@ -1722,13 +2204,15 @@ const Book = {
 
   next() {
     const id = this.nextId();
-    if (id) this.flipTo(id);
+    if (id === 'sira') this.toDesk();
+    else if (id) this.flipTo(id);
   },
 
   beginDrag() {
     if (this.flipping) return false;
     const id = this.nextId();
-    if (!id) return false;
+    if (!id || id === 'sira') return false;
+    Scribe.away();
     this.flipping = true;
     this.prepare(id);
     this.angle = 0;
@@ -1764,7 +2248,26 @@ const Book = {
           this.lastDump = Date.now();
           sendBoardDump();
           if (S.imza && S.imza.length) this.live.send({ t: 'imza', st: S.imza });
+          if (S.cevap && !S.cevapOk) sendStrokes(this.live, 'ucak', S.cevap);
+          if (S.portre && S.portre.z) sendStrokes(this.live, 'portre', S.portre.z);
         }
+        break;
+      case 'portre':
+        this.portreInbox = this.portreInbox || new StrokeInbox();
+        if (this.portreInbox.add(m)) {
+          S.portre = S.portre || {};
+          S.portre.e = this.portreInbox.result();
+          save();
+          if (this.onPortreGeldi) this.onPortreGeldi();
+        }
+        break;
+      case 'portre-son':
+        if (this.onPortreEnd) this.onPortreEnd();
+        break;
+      case 'ucak-ok':
+        S.cevapOk = true;
+        save();
+        if (this.onPlaneAck) this.onPlaneAck();
         break;
       case 'not':
         Notes.push(m.metin);
@@ -1809,10 +2312,13 @@ const Book = {
     }
     x.putImageData(img, 0, 0);
     document.documentElement.style.setProperty('--doku', `url(${c.toDataURL()})`);
+    document.documentElement.style.setProperty('--tahta', `url(${chalkTexture()})`);
 
     this.root = document.getElementById('defter');
+    // Enes'in sekmesi arka plandayken nabzı seyrekleşir; hemen "yok" saymayalım.
     this.live = new Live({
       role: 'z',
+      peerMs: 75000,
       onMessage: (m) => this.handleLive(m),
       onReady: () => broadcast(),
     });
@@ -1827,12 +2333,47 @@ const Book = {
         sleep(2600),
       ]).catch(() => {});
     }
-    this.show(S.bitti ? 'kapak' : S.page);
+    Desk.build(this.root);
+    Scribe.init(this.root);
+    if (S.bitti) {
+      setTheme(WOOD);
+      Desk.full(false, (id, node) => this.fromDesk(id, node));
+    } else if (S.page === 'kapak') {
+      setTheme(WOOD);
+      Desk.intro(() => this.openNotebook());
+    } else {
+      this.show(S.page);
+    }
     this.live.start();
     keepAwake();
     keepInputsVisible(this.root);
   },
 };
+
+// Kara tahtanın silinmiş tebeşir izleri.
+function chalkTexture() {
+  const c = document.createElement('canvas');
+  c.width = 300;
+  c.height = 620;
+  const x = c.getContext('2d');
+  x.fillStyle = BOARD;
+  x.fillRect(0, 0, 300, 620);
+  x.lineCap = 'round';
+  for (let i = 0; i < 90; i++) {
+    x.strokeStyle = `rgba(232,240,232,${rand(0.006, 0.03)})`;
+    x.lineWidth = rand(12, 46);
+    const sx = rand(-40, 300), sy = rand(-40, 620), a = rand(-0.5, 0.5);
+    x.beginPath();
+    x.moveTo(sx, sy);
+    x.quadraticCurveTo(sx + 90, sy + rand(-30, 30), sx + Math.cos(a) * 210, sy + Math.sin(a) * 210);
+    x.stroke();
+  }
+  for (let i = 0; i < 5000; i++) {
+    x.fillStyle = `rgba(${Math.random() < 0.5 ? '255,255,255' : '0,0,0'},${rand(0.01, 0.05)})`;
+    x.fillRect(rand(0, 300), rand(0, 620), 1, 1);
+  }
+  return c.toDataURL('image/jpeg', 0.72);
+}
 
 // Okurken ekran kararmasın. Sekmeye dönüldüğünde kilit yeniden istenir.
 function keepAwake() {
