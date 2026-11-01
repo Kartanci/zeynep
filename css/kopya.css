@@ -1,0 +1,136 @@
+html, body { overflow: auto; height: auto; min-height: 100%; }
+
+.kopya-govde {
+  background: #d9d3c4;
+  color: #23252b;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.kopya {
+  max-width: 620px;
+  margin: 0 auto;
+  padding: 18px 18px 60px;
+  min-height: 100vh;
+  background-color: var(--kagit);
+  background-image:
+    linear-gradient(var(--kare-cizgi) 1px, transparent 1px),
+    linear-gradient(90deg, var(--kare-cizgi) 1px, transparent 1px);
+  background-size: var(--kare) var(--kare);
+  box-shadow: 0 0 30px rgba(50, 40, 20, .25);
+}
+
+.k-ust { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.k-ust h1 { margin: 0; font-size: 28px; font-weight: 700; color: var(--kirmizi); }
+
+.k-durum { font-size: 16px; color: var(--kursun); white-space: nowrap; }
+.k-durum::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: #b6b2a7;
+}
+.k-durum.acik { color: #1c7a3d; }
+.k-durum.acik::before { background: #24a650; }
+.k-durum.yari::before { background: #e0a81e; }
+
+.k-simdi {
+  margin: 14px 0;
+  padding: 16px;
+  background: var(--postit);
+  box-shadow: 0 1px 1px rgba(60, 50, 10, .2), 3px 6px 12px -4px rgba(60, 50, 10, .3);
+  transform: rotate(-.3deg);
+}
+.k-simdi h2 { margin: 0 0 6px; font-size: 25px; line-height: 30px; font-weight: 700; color: #23252b; }
+.k-simdi p { margin: 6px 0; font-size: 19px; line-height: 26px; }
+.k-simdi .k-alinti { color: var(--kirmizi); }
+
+.k-imza, .k-odev { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.k-eylem { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.k-eylem .kucuk-dugme { font-size: 20px; }
+.k-eylem .kucuk-dugme.ana { background: var(--kirmizi); border-color: var(--kirmizi); }
+
+.k-sinav { list-style: none; margin: 10px 0 0; padding: 0; font-size: 17px; line-height: 23px; }
+.k-sinav li { display: flex; gap: 10px; padding: 4px 0; border-bottom: 1px dotted rgba(40, 40, 30, .3); }
+.k-sinav li span:first-child { flex: 1; }
+.k-sinav li.simdi { font-weight: 700; }
+.k-isaret { flex: none; width: 22px; text-align: center; font-weight: 700; color: var(--kirmizi); }
+
+.k-tahta { margin: 14px 0; }
+.k-tahta-cerceve {
+  height: min(70vh, 640px);
+  aspect-ratio: 1000 / 1400;
+  max-width: 100%;
+  margin: 0 auto 10px;
+  display: flex;
+  border: 1.5px dashed rgba(28, 60, 158, .4);
+  background: rgba(255, 255, 255, .35);
+}
+.k-tahta .tuval { margin: 0; width: 100%; height: 100%; cursor: crosshair; }
+
+.k-kutu { margin: 26px 0; }
+.k-kutu h2 { margin: 0 0 6px; font-size: 22px; font-weight: 700; color: var(--kirmizi); }
+
+.k-ince { margin: 2px 0 8px; font-size: 16px; line-height: 22px; color: var(--kursun); }
+.k-sonuc { min-height: 22px; }
+
+.k-not { display: flex; gap: 10px; }
+.k-not input {
+  flex: 1;
+  min-width: 0;
+  height: 46px;
+  padding: 0 4px;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid #23252b;
+  border-radius: 0;
+  outline: 0;
+  font-family: var(--el);
+  font-size: 20px;
+  color: #23252b;
+}
+
+.k-liste { margin: 0; padding: 0 0 0 22px; font-size: 18px; line-height: 25px; }
+.k-liste li { margin-bottom: 10px; }
+.k-liste b { font-weight: 700; }
+.k-liste code { font-size: 15px; background: rgba(0, 0, 0, .07); padding: 1px 5px; border-radius: 3px; }
+
+.k-link { font-family: var(--el); font-size: 18px; color: var(--mavi); text-decoration: underline; word-break: break-all; text-align: left; }
+
+/* Mum perdesi: bu ekran da yüzünü aydınlatsın diye tam ekran */
+.k-mum { position: fixed; inset: 0; z-index: 100; }
+.k-mum .mum-sahne { position: absolute; }
+.k-mum-yazi {
+  position: absolute;
+  left: 50%;
+  top: 14px;
+  transform: translateX(-50%);
+  width: min(92%, 560px);
+  z-index: 110;
+  padding: 10px 16px;
+  font-size: 18px;
+  line-height: 25px;
+  color: rgba(255, 240, 215, .92);
+  background: rgba(30, 12, 2, .46);
+  border-radius: 10px;
+  transition: opacity .6s;
+}
+.k-mum-yazi.gizli { opacity: 0; }
+.k-mum-eylem {
+  position: absolute;
+  left: 50%;
+  bottom: 26px;
+  transform: translateX(-50%);
+  z-index: 110;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+  width: 92%;
+}
+.k-mum-eylem .kucuk-dugme { color: #fff2dc; border-color: rgba(255, 242, 220, .65); font-size: 21px; padding: 13px 22px; background: rgba(30, 12, 2, .4); }
+.k-mum-eylem .kucuk-dugme.ana { background: #fff2dc; color: #3b1a06; border-color: #fff2dc; }

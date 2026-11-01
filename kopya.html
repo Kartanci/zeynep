@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Kopya kağıdı</title>
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#fbf8ee">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='6' y='3' width='20' height='26' fill='%23fbf8ee' stroke='%23d02b27' stroke-width='2'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Just+Me+Again+Down+Here&family=Kalam:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/defter.css">
+  <link rel="stylesheet" href="css/kopya.css">
+</head>
+<body class="kopya-govde">
+  <div class="kopya">
+    <header class="k-ust">
+      <h1>kopya kağıdı</h1>
+      <div id="baglanti" class="k-durum">bağlanıyor</div>
+    </header>
+
+    <section id="simdi" class="k-simdi"></section>
+
+    <section id="tahta" class="k-tahta" hidden>
+      <div class="k-tahta-cerceve"><div id="tuval" class="tuval"></div></div>
+      <div class="araclar">
+        <button id="geriAl" class="kucuk-dugme">geri al</button>
+        <button id="fosforlu" class="kucuk-dugme fosfor-dugme">fosforlu</button>
+      </div>
+    </section>
+
+    <section id="gorusKutu" class="k-kutu" hidden>
+      <h2>karnesine görüş yaz</h2>
+      <p class="k-ince">Tek cümle. Site değil sen yazıyorsun, karnesinde senin elinle görünecek.</p>
+      <form id="gorusForm" class="k-not">
+        <input id="gorusYazi" maxlength="90" placeholder="derslerine çalışmıyor ama..." autocomplete="off">
+        <button class="kucuk-dugme ana">yaz</button>
+      </form>
+      <div id="gorusDurum" class="k-ince k-sonuc"></div>
+    </section>
+
+    <section class="k-kutu">
+      <h2>ona not at</h2>
+      <p class="k-ince">Telefonunda yandan katlı bir kağıt kayar, açınca senin yazın çıkar.</p>
+      <form id="notForm" class="k-not">
+        <input id="notYazi" maxlength="140" placeholder="bana öyle bakma" autocomplete="off">
+        <button class="kucuk-dugme ana">at</button>
+      </form>
+      <div id="notDurum" class="k-ince k-sonuc"></div>
+    </section>
+
+    <section class="k-kutu">
+      <h2>başlamadan önce</h2>
+      <ol class="k-liste">
+        <li><b>Bu sayfayı bilgisayarda aç,</b> telefonun görüşmede kalsın. Tek telefon varsa da olur, ama görüşmeden çıkınca kameran durabilir.</li>
+        <li><b>Görüşmeyi FaceTime ya da WhatsApp'tan yapın.</b> Bazı uygulamalar tarayıcıya geçince kamerayı durdurur, o zaman mum ışığını yüzünde göremezsin. Önceden bir arkadaşınla dene: görüşme sırasında tarayıcıya geç, seni görmeye devam ediyor mu sor.</li>
+        <li>Linki görüşme başladıktan sonra at: <button id="linkKopyala" class="k-link"></button>. Önizlemede "Defterini bende unutmuşsun" yazar. Başka bir şey söyleme.</li>
+        <li><b>Şarkıyı sen söyleyeceksin</b> ve hemen ardından kendi cümlelerini kuracaksın. Mum yanınca site susuyor, konuşan sensin. 2-3 cümle düşün, ezberleme.</li>
+        <li>Prova: linki kendi telefonunda aç, burayı bilgisayarda. Bitince telefonda linkin sonuna <code>?sifirla</code> ekleyip aç. Zeynep'in telefonunu zaten etkilemez.</li>
+      </ol>
+    </section>
+
+    <section class="k-kutu">
+      <h2>sırayla ne olacak</h2>
+      <ol class="k-liste" id="plan"></ol>
+    </section>
+  </div>
+
+  <script src="js/icerik.js"></script>
+  <script src="js/pen.js"></script>
+  <script src="js/live.js"></script>
+  <script src="js/board.js"></script>
+  <script src="js/candle.js"></script>
+  <script src="js/kopya.js"></script>
+</body>
+</html>
