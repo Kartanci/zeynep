@@ -30,14 +30,13 @@ const ICERIK = {
     'Canım sevgilim,',
     'İyi ki doğdun, iyi ki benimsin. Ben seninle hayat buldum. Seni çok ama çok seviyorum.',
     'Dünya bir yana, sen bir yana...',
-    'Bu defter sende anı olarak kalsın.',
   ],
 
   // Arka kapaktaki çarpım tablosunun yanına el yazısıyla düşülen notlar (yaş x 1, x 2, x 3, x 4).
   carpim: [
-    'bugün',
-    'hâlâ "ne yiyelim" diyeceğiz',
-    'hâlâ sen haklı olacaksın',
-    'mum sığmayacak. yine bir tane dikeriz',
+    'yaşın bugün',
+    'yaşında hâlâ "ne yiyelim" diyeceğiz',
+    'yaşında hâlâ sen haklı olacaksın',
+    'yaşında mum sığmayacak, yine bir tane dikeriz',
   ],
 };

@@ -2,7 +2,7 @@
 class Board {
   static W = 1000;
   static H = 1400;
-  static INK = { z: '#1c3c9e', e: '#d02b27', o: '#d02b27' };
+  static INK = { z: '#d02b27', e: ' #1c3c9e', o: '#d02b27' };
 
   constructor(wrap, { me = 'z', strokes = [], W = Board.W, H = Board.H, send = () => {}, onChange = () => {}, onRemote = () => {} } = {}) {
     Object.assign(this, { wrap, me, W, H, send, onChange, onRemote });
