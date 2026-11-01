@@ -9,7 +9,7 @@ const PLAN = [
   ['İlk bilet', 'Her çarpısı bir bilet. Birini hemen kazır, gerisi en sona, sıranın üstüne kalır. Kuponlar gerçek, sonradan bozdurabilir.'],
   ['Teneffüs', 'Kara tahta. 3-2-1\'de ikiniz aynı anda bir kelime söylersiniz. Tutmazsa o iki kelimenin ortasını bulmaya çalışırsınız. Dördüncü turdan sonra "zil çaldı" deyip geçebilir.'],
   ['Portre', 'Birbirinizi çizersiniz, bir dakika. Birbirinizinkini görmeden. "Hazırız" dediği an aşağıda tahtan açılır, süre bitince ikisi aynı anda ortaya çıkar. Kötü çiz, olayı bu.'],
-  ['Pasta', 'Pasta yok, birlikte çizersiniz. O mavi, sen kırmızı. Bu sayfada tahta açılır, çizdiğin anında onda da görünür.'],
+  ['Pasta', 'Pasta yok, birlikte çizersiniz. O kırmızı, sen mavi. Bu sayfada tahta açılır, çizdiğin anında onda da görünür.'],
   ['Mum', 'Işığı kapatır. Telefonunun ekranı odadaki tek ışık olur, yani sen onun yüzünü mum ışığında görürsün. Mumu sen yakarsın, şarkıyı sen söylersin, o üfler, üflediğini görünce düğmeye basarsın.'],
   ['Karne', 'Akşamın sonuçlarını karnede görür. "Bir üst yaşa geçmiştir." <b>Burada sıra sende:</b> karnesine tek cümle görüş yazacaksın, senin elinle düşecek.'],
   ['Son sayfa', 'Senin notun, siyah kalemle yazılıyor. Altına cevap yazarsa kağıt uçak yapıp fırlatabilir, uçak bu sayfaya düşer.'],
@@ -63,7 +63,7 @@ const STEPS = {
   resimler: () => ({ h: 'çizimlere bakıyor', t: 'Pastanıza ve portrelere bakıyor.' }),
   pasta: (s) => ({
     h: s.candle ? 'mumu dikti' : 'pastayı çizin',
-    t: s.candle ? 'Sıra mumda. Sayfayı çevirince ışığı kapatmasını isteyecek. <b>Sen de kapat</b>, bu ekranın parlaklığını aç.' : 'Sen kırmızısın. Aşağıdaki tahtaya çizdiğin anında onda görünür, onunkini de burada görürsün.',
+    t: s.candle ? 'Sıra mumda. Sayfayı çevirince ışığı kapatmasını isteyecek. <b>Sen de kapat</b>, bu ekranın parlaklığını aç.' : 'Sen mavisin. Aşağıdaki tahtaya çizdiğin anında onda görünür, onunkini de burada görürsün.',
   }),
   mum: (s) => {
     if (s.mum === 'karanlik') return { h: 'karanlıkta bekliyor', t: 'Mumu sen yakıyorsun.', a: [{ label: 'mumu yak', msg: { t: 'yak' }, main: true }] };

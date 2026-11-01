@@ -1110,7 +1110,7 @@ PAGES.pasta = {
     const finished = new Promise((res) => { fin.onclick = (e) => { e.stopPropagation(); res(); }; });
     await p.write('pasta ~~var~~ yok. barışın, çizin.', { into: head, pause: 80 });
     await p.write(
-      Book.live.peerOnline ? 'enes de bu sayfada. kırmızı kalem onun.' : 'enes tarif etsin, sen çiz.',
+      Book.live.peerOnline ? 'enes de bu sayfada. mavi kalem onun.' : 'enes tarif etsin, sen çiz.',
       { into: head, cls: 'kucuk', pause: 0 },
     );
     await finished;
